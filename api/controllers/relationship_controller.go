@@ -20,7 +20,7 @@ func (server *Server) Block(w http.ResponseWriter, r *http.Request) {
 	params := models.UpdateParams{}
 	err = json.Unmarshal(body, &params)
 
-	_, err = models.Block(server.DB, params)
+	_, err = models.Block(server.DB, models.FriendService{models.UtilService{}}, params)
 
 	if err != nil {
 
@@ -39,7 +39,7 @@ func (server *Server) SubscribeFriend(w http.ResponseWriter, r *http.Request) {
 	}
 	subscribeParams := models.UpdateParams{}
 	err = json.Unmarshal(body, &subscribeParams)
-	_, err = models.Subscribe(server.DB, subscribeParams)
+	_, err = models.Subscribe(server.DB, models.FriendService{models.UtilService{}}, subscribeParams)
 
 	if err != nil {
 		formattedError := formaterror.FormatError(err.Error())
@@ -138,7 +138,7 @@ func (server *Server) MakeFriend(w http.ResponseWriter, r *http.Request) {
 	}
 	relationship := models.Relationship{}
 	//relationship.Prepare()
-	data, err := relationship.MakeFriend(server.DB, friendInfo)
+	data, err := relationship.MakeFriend(server.DB, models.FriendService{models.UtilService{}}, friendInfo)
 	if err != nil {
 		formattedError := formaterror.FormatError(err.Error())
 		responses.ERROR(w, http.StatusBadRequest, formattedError)

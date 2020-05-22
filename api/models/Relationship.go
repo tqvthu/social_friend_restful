@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+type FriendService struct {
+	FriendDBAction UtilAction
+}
+type UtilService struct {}
+type UtilAction interface {
+	isBadRequest(db *gorm.DB, email []string) bool
+	CheckRelationship(db *gorm.DB, email[]string) (FriendInfo, error)
+}
+
 type Relationship struct {
 	ID        uint64    `gorm:"primary_key;auto_increment" json:"id"`
 	UserOneEmail   string    `gorm:"size:255;not null;" json:"user_one_email"`
@@ -46,15 +55,15 @@ func (r *Relationship) Validate() error {
 	return nil
 }
 
-func Block(db *gorm.DB, params UpdateParams) (Relationship, error) {
+func Block(db *gorm.DB, fs FriendService ,params UpdateParams) (Relationship, error) {
 	emails := []string{params.Requestor, params.Target}
 	var err error
-	isBadRequest := isBadRequest(db, emails)
+	isBadRequest := fs.FriendDBAction.isBadRequest(db, emails)
 	if isBadRequest {
 		err = errors.New("Bad Request")
 		return Relationship{}, err
 	}
-	connectionInfo, _ := CheckRelationship(db, emails)
+	connectionInfo, _ := fs.FriendDBAction.CheckRelationship(db, emails)
 	if connectionInfo.Status == utils.BlOCK {
 		return Relationship{}, errors.New("Has Blocked Already")
 	}
@@ -92,7 +101,7 @@ func Block(db *gorm.DB, params UpdateParams) (Relationship, error) {
 /**
 check if any bad request
  */
-func isBadRequest(db *gorm.DB, emails []string) bool{
+func (us UtilService) isBadRequest(db *gorm.DB, emails []string) bool{
 	var count int
 	db.Debug().Model(&User{}).Where("email =?", emails[0]).Count(&count)
 	if count == 0 {
@@ -108,7 +117,7 @@ func isBadRequest(db *gorm.DB, emails []string) bool{
 /**
 checking relationship before processing friend connection
  */
-func CheckRelationship(db *gorm.DB, emails []string) (FriendInfo, error) {
+func (us UtilService) CheckRelationship(db *gorm.DB, emails []string) (FriendInfo, error) {
 	var err error
 	relationship := Relationship{}
 	db.Where("(user_one_email =? and user_two_email =?) or (user_one_email =? and user_two_email=?)", emails[0], emails[1], emails[1], emails[0]).First(&relationship)
@@ -134,14 +143,14 @@ func CheckRelationship(db *gorm.DB, emails []string) (FriendInfo, error) {
 /**
 make friend connection
  */
-func (re *Relationship) MakeFriend(db *gorm.DB, friendInfo MakeFriendParams) (Relationship, error) {
-	isBadRequest := isBadRequest(db, friendInfo.Friend)
+func (re *Relationship) MakeFriend(db *gorm.DB, fs FriendService, friendInfo MakeFriendParams) (Relationship, error) {
+	isBadRequest := fs.FriendDBAction.isBadRequest(db, friendInfo.Friend)
 	var err error
 	if isBadRequest {
 		return Relationship{}, errors.New("Bad Request")
 	}
 	r := Relationship{}
-	connectionInfo, _ := CheckRelationship(db,friendInfo.Friend)
+	connectionInfo, _ := fs.FriendDBAction.CheckRelationship(db,friendInfo.Friend)
 	if connectionInfo.Status == utils.BlOCK {
 		return r, errors.New("The user with email " + connectionInfo.ActionEmail + " Has Already Blocked the user " + connectionInfo.BlockedEmail)
 	} else if connectionInfo.Status != utils.PENDING && connectionInfo.Status != utils.SUBSCRIBE {
@@ -228,16 +237,16 @@ func FindAllRecipients(db *gorm.DB, params GetRecipientParams) ([]string, error)
 /**
 subscribe
  */
-func Subscribe(db *gorm.DB, params UpdateParams) (Relationship, error) {
+func Subscribe(db *gorm.DB, fs FriendService, params UpdateParams) (Relationship, error) {
 	emails := []string{params.Requestor, params.Target}
-	isBadRequest := isBadRequest(db, emails)
+	isBadRequest := fs.FriendDBAction.isBadRequest(db, emails)
 	var err error
 	r := Relationship{}
 	if isBadRequest {
 		return r, errors.New("Bad Request")
 	}
 
-	connectionInfo, _ := CheckRelationship(db, emails)
+	connectionInfo, _ := fs.FriendDBAction.CheckRelationship(db, emails)
 
 	if connectionInfo.RelationshipID != 0 { // has connected already
 		if  connectionInfo.Status == utils.BlOCK && connectionInfo.ActionEmail == params.Target {
